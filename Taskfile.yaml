@@ -1,0 +1,43 @@
+# https://taskfile.dev
+#
+# Build helper for producing the self-contained, runnable Openllet engine jar
+# (CLI + com.eccenca.openllet entry points + all runtime dependencies) used by
+# cmem-plugin-pellet. Requires `mvn` and a JDK 11+.
+---
+version: '3'
+
+vars:
+  VERSION:
+    sh: mvn -q -Dexec.executable=echo -Dexec.args='${project.version}' --non-recursive exec:exec 2>/dev/null || echo '2.6.6-SNAPSHOT'
+  UBER_JAR: tools-cli/target/openllet-cli-{{.VERSION}}-uber.jar
+  DIST_JAR: dist/openllet.jar
+
+tasks:
+
+  default:
+    cmds:
+      - task --list
+    silent: true
+
+  build:
+    desc: >
+      Build the self-contained, runnable Openllet uber-jar and place it at
+      {{.DIST_JAR}}. This is the artifact cmem-plugin-pellet runs (operators point
+      the plugin's PELLET_JAR at it).
+    cmds:
+      - mvn -q -B -DskipTests -pl tools-cli -am package
+      - mkdir -p dist
+      - cp {{.UBER_JAR}} {{.DIST_JAR}}
+      - 'echo "Built {{.DIST_JAR}} from Openllet {{.VERSION}}"'
+
+  check:
+    desc: Smoke-test the built engine jar (CLI is runnable).
+    cmds:
+      - java -jar {{.DIST_JAR}} help >/dev/null
+      - 'echo "Engine jar OK: {{.DIST_JAR}}"'
+
+  clean:
+    desc: Remove build output.
+    cmds:
+      - mvn -q -B clean
+      - rm -rf dist
