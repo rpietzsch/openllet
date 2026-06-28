@@ -1,0 +1,81 @@
+---
+name: build-uber-jar
+
+on:
+  push:
+    branches: [feature/uber-jar, integration]
+    tags: ['v*']
+  pull_request:
+    branches: [integration]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to create/publish (e.g. v2.6.6 or dev-latest)'
+        required: true
+        default: 'dev-latest'
+      prerelease:
+        description: 'Mark the release as a pre-release'
+        type: boolean
+        default: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build uber-jar
+        run: task build
+
+      - name: Smoke-test engine jar
+        run: task check
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openllet-uber-jar
+          path: dist/openllet.jar
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: >
+      startsWith(github.ref, 'refs/tags/v') ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build uber-jar
+        run: task build
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/openllet.jar
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          prerelease: ${{ github.event.inputs.prerelease || false }}
+          generate_release_notes: true
